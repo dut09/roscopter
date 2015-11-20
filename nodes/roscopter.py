@@ -23,7 +23,7 @@ parser.add_option("--enable-control",dest="enable_control", default=False, help=
 
 (opts, args) = parser.parse_args()
 
-import mavutil
+from pymavlink import mavutil
 
 # create a mavlink serial instance
 master = mavutil.mavlink_connection(opts.device, baud=opts.baudrate)
@@ -65,19 +65,19 @@ def send_rc(data):
 
 def set_arm(req):
     master.arducopter_arm()
-    return True
+    return []
 
 def set_disarm(req):
     master.arducopter_disarm()
-    return True
+    return []
 
-pub_gps = rospy.Publisher('gps', NavSatFix)
+pub_gps = rospy.Publisher('gps', NavSatFix, queue_size=10)
 #pub_imu = rospy.Publisher('imu', Imu)
-pub_rc = rospy.Publisher('rc', roscopter.msg.RC)
-pub_state = rospy.Publisher('state', roscopter.msg.State)
-pub_vfr_hud = rospy.Publisher('vfr_hud', roscopter.msg.VFR_HUD)
-pub_attitude = rospy.Publisher('attitude', roscopter.msg.Attitude)
-pub_raw_imu =  rospy.Publisher('raw_imu', roscopter.msg.Mavlink_RAW_IMU)
+pub_rc = rospy.Publisher('rc', roscopter.msg.RC, queue_size=10)
+pub_state = rospy.Publisher('state', roscopter.msg.State, queue_size=10)
+pub_vfr_hud = rospy.Publisher('vfr_hud', roscopter.msg.VFR_HUD, queue_size=10)
+pub_attitude = rospy.Publisher('attitude', roscopter.msg.Attitude, queue_size=10)
+pub_raw_imu =  rospy.Publisher('raw_imu', roscopter.msg.Mavlink_RAW_IMU, queue_size=10)
 if opts.enable_control:
     #rospy.Subscriber("control", roscopter.msg.Control , mav_control)
     rospy.Subscriber("send_rc", roscopter.msg.RC , send_rc)
