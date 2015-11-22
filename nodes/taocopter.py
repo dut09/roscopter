@@ -44,16 +44,16 @@ ALTHOLD_MODE = 1685
 # rely on the user to align the copter and the world coordinates. This could be
 # resolved by using axisangles from the VICON data, but we just want to keep
 # this example simple at the beginning.
-rp_p = 0.15
+rp_p = 0.1
 rp_i = 0.0
-rp_d = 0.05
+rp_d = 0.15
 z_p = 0.25
 z_i = 0.0
 z_d = 0.5
 z_integral = 0.0
-p_max = 75 # The max value for the proportional gain.
+p_max = 60 # The max value for the proportional gain.
 i_max = 50 # The max value for the integral gain.
-d_max = 75 # The max value for the derivative gain.
+d_max = 90 # The max value for the derivative gain.
 
 def Clamp(val, lower, upper):
   return min(max(val, lower), upper)
