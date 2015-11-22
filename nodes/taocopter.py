@@ -104,6 +104,7 @@ def PublishCommand():
       # Update the throttle value for altitude hold.
       command[2] = 1450 + Clamp(z_p * z_error, -125, 125) + \
                    Clamp(z_d * z_dev, -d_max, d_max)
+      print command[0], x_current, command[1], y_current, command[2], z_current
     if is_land_mode:
       command[4] = LAND_MODE
     else:
