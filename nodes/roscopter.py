@@ -2,10 +2,11 @@
 import roslib; roslib.load_manifest('roscopter')
 import rospy
 from std_msgs.msg import String, Header
+from mit_msgs.msg import MocapPosition
 from std_srvs.srv import *
 from sensor_msgs.msg import NavSatFix, NavSatStatus, Imu
 import roscopter.msg
-import sys,struct,time,os
+import sys,struct,time,os,math
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../mavlink/pymavlink'))
 
@@ -58,6 +59,24 @@ def send_rc(data):
     master.mav.rc_channels_override_send(master.target_system, master.target_component,data.channel[0],data.channel[1],data.channel[2],data.channel[3],data.channel[4],data.channel[5],data.channel[6],data.channel[7])
     print ("sending rc: %s"%data)
 
+# Fake GPS data.
+def send_vicon(data):
+    # The radius of the earth in millimeters.
+    radius = 6378 * 1000 * 1000
+    latitude = 180 * data.translational.y * 1e7 / radius / math.pi
+    longitude = 180 * data.translational.x * 1e7 / radius / math.pi
+    master.mav.gps_raw_int_send(time.time() * 1000 * 1000, # Microseconds since UNIX epoch. \
+                                3, # 3D fix. \
+                                latitude, # Latitude. \
+                                longitude, # Longitude. \
+                                data.translational.z, # Meters above sea level * 1000. \
+                                1, # HDOP. Fake this so that we can arm in Loiter mode. \
+                                65535, # VDOP. \
+                                65535, # Ground speed. \
+                                65535, # Course over ground. \
+                                255 # Satellites visible. \
+                               )
+    print latitude, longitude
 
 #service callbacks
 #def set_mode(mav_mode):
@@ -78,6 +97,8 @@ pub_state = rospy.Publisher('state', roscopter.msg.State, queue_size=50)
 pub_vfr_hud = rospy.Publisher('vfr_hud', roscopter.msg.VFR_HUD, queue_size=50)
 pub_attitude = rospy.Publisher('attitude', roscopter.msg.Attitude, queue_size=50)
 pub_raw_imu =  rospy.Publisher('raw_imu', roscopter.msg.Mavlink_RAW_IMU, queue_size=50)
+# Fake GPS data.
+rospy.Subscriber("TaoCopter", MocapPosition, send_vicon)
 if opts.enable_control:
     #rospy.Subscriber("control", roscopter.msg.Control , mav_control)
     rospy.Subscriber("send_rc", roscopter.msg.RC , send_rc)
