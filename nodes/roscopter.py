@@ -16,7 +16,7 @@ parser = OptionParser("roscopter.py [options]")
 parser.add_option("--baudrate", dest="baudrate", type='int',
                   help="master port baud rate", default=57600)
 parser.add_option("--device", dest="device", default="/dev/ttyUSB0", help="serial device")
-parser.add_option("--rate", dest="rate", default=10, type='int', help="requested stream rate")
+parser.add_option("--rate", dest="rate", default=50, type='int', help="requested stream rate")
 parser.add_option("--source-system", dest='SOURCE_SYSTEM', type='int',
                   default=255, help='MAVLink source system for this GCS')
 parser.add_option("--enable-control",dest="enable_control", default=False, help="Enable listning to control messages")
@@ -71,13 +71,13 @@ def set_disarm(req):
     master.arducopter_disarm()
     return []
 
-pub_gps = rospy.Publisher('gps', NavSatFix, queue_size=10)
+#pub_gps = rospy.Publisher('gps', NavSatFix, queue_size=10)
 #pub_imu = rospy.Publisher('imu', Imu)
-pub_rc = rospy.Publisher('rc', roscopter.msg.RC, queue_size=10)
-pub_state = rospy.Publisher('state', roscopter.msg.State, queue_size=10)
-pub_vfr_hud = rospy.Publisher('vfr_hud', roscopter.msg.VFR_HUD, queue_size=10)
-pub_attitude = rospy.Publisher('attitude', roscopter.msg.Attitude, queue_size=10)
-pub_raw_imu =  rospy.Publisher('raw_imu', roscopter.msg.Mavlink_RAW_IMU, queue_size=10)
+pub_rc = rospy.Publisher('rc', roscopter.msg.RC, queue_size=50)
+pub_state = rospy.Publisher('state', roscopter.msg.State, queue_size=50)
+#pub_vfr_hud = rospy.Publisher('vfr_hud', roscopter.msg.VFR_HUD, queue_size=10)
+#pub_attitude = rospy.Publisher('attitude', roscopter.msg.Attitude, queue_size=10)
+#pub_raw_imu =  rospy.Publisher('raw_imu', roscopter.msg.Mavlink_RAW_IMU, queue_size=10)
 if opts.enable_control:
     #rospy.Subscriber("control", roscopter.msg.Control , mav_control)
     rospy.Subscriber("send_rc", roscopter.msg.RC , send_rc)
@@ -112,31 +112,31 @@ def mainloop():
                 pub_state.publish(msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED, 
                                   msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED, 
                                   mavutil.mode_string_v10(msg))
-            if msg_type == "VFR_HUD":
-                pub_vfr_hud.publish(msg.airspeed, msg.groundspeed, msg.heading, msg.throttle, msg.alt, msg.climb)
+            #if msg_type == "VFR_HUD":
+            #    pub_vfr_hud.publish(msg.airspeed, msg.groundspeed, msg.heading, msg.throttle, msg.alt, msg.climb)
 
-            if msg_type == "GPS_RAW_INT":
-                fix = NavSatStatus.STATUS_NO_FIX
-                if msg.fix_type >=3:
-                    fix=NavSatStatus.STATUS_FIX
-                pub_gps.publish(NavSatFix(latitude = msg.lat/1e07,
-                                          longitude = msg.lon/1e07,
-                                          altitude = msg.alt/1e03,
-                                          status = NavSatStatus(status=fix, service = NavSatStatus.SERVICE_GPS) 
-                                          ))
+            #if msg_type == "GPS_RAW_INT":
+            #    fix = NavSatStatus.STATUS_NO_FIX
+            #    if msg.fix_type >=3:
+            #        fix=NavSatStatus.STATUS_FIX
+            #    pub_gps.publish(NavSatFix(latitude = msg.lat/1e07,
+            #                              longitude = msg.lon/1e07,
+            #                              altitude = msg.alt/1e03,
+            #                              status = NavSatStatus(status=fix, service = NavSatStatus.SERVICE_GPS) 
+            #                              ))
             #pub.publish(String("MSG: %s"%msg))
-            if msg_type == "ATTITUDE" :
-                pub_attitude.publish(msg.roll, msg.pitch, msg.yaw, msg.rollspeed, msg.pitchspeed, msg.yawspeed)
+            #if msg_type == "ATTITUDE" :
+            #    pub_attitude.publish(msg.roll, msg.pitch, msg.yaw, msg.rollspeed, msg.pitchspeed, msg.yawspeed)
 
 
-            if msg_type == "LOCAL_POSITION_NED" :
-                print "Local Pos: (%f %f %f) , (%f %f %f)" %(msg.x, msg.y, msg.z, msg.vx, msg.vy, msg.vz)
+            #if msg_type == "LOCAL_POSITION_NED" :
+            #    print "Local Pos: (%f %f %f) , (%f %f %f)" %(msg.x, msg.y, msg.z, msg.vx, msg.vy, msg.vz)
 
-            if msg_type == "RAW_IMU" :
-                pub_raw_imu.publish (Header(), msg.time_usec, 
-                                     msg.xacc, msg.yacc, msg.zacc, 
-                                     msg.xgyro, msg.ygyro, msg.zgyro,
-                                     msg.xmag, msg.ymag, msg.zmag)
+            #if msg_type == "RAW_IMU" :
+            #    pub_raw_imu.publish (Header(), msg.time_usec, 
+            #                         msg.xacc, msg.yacc, msg.zacc, 
+            #                         msg.xgyro, msg.ygyro, msg.zgyro,
+            #                         msg.xmag, msg.ymag, msg.zmag)
 
 
 
@@ -146,8 +146,8 @@ wait_heartbeat(master)
 
 
 # waiting for 10 seconds for the system to be ready
-print("Sleeping for 10 seconds to allow system, to be ready")
-rospy.sleep(10)
+print("Sleeping for 5 seconds to allow system, to be ready")
+rospy.sleep(5)
 print("Sending all stream request for rate %u" % opts.rate)
 #for i in range(0, 3):
 
