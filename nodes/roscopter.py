@@ -5,6 +5,7 @@ from std_msgs.msg import String, Header
 from mit_msgs.msg import MocapPosition
 from std_srvs.srv import *
 from sensor_msgs.msg import NavSatFix, NavSatStatus, Imu
+from transformations import *
 import roscopter.msg
 import sys,struct,time,os,math
 
@@ -59,12 +60,60 @@ def send_rc(data):
     master.mav.rc_channels_override_send(master.target_system, master.target_component,data.channel[0],data.channel[1],data.channel[2],data.channel[3],data.channel[4],data.channel[5],data.channel[6],data.channel[7])
     print ("sending rc: %s"%data)
 
-# Fake GPS data.
+# Fake GPS and compass data.
 def send_vicon(data):
+    # Get the translation and rotation data.
+    x = data.translational.x # Faked East direction.
+    y = data.translational.y # Faked North direction.
+    z = data.translational.z # Millimeters, faked "meters above sea level."
     # The radius of the earth in millimeters.
-    radius = 6378 * 1000 * 1000
-    latitude = 180 * data.translational.y * 1e7 / radius / math.pi
-    longitude = 180 * data.translational.x * 1e7 / radius / math.pi
+    radius = 6378.0 * 1000.0 * 1000.0
+    # Faked latitude.
+    latitude = y * 1.0 / (radius + z) * 180.0 / math.pi * 1e7
+    # Faked longitude.
+    longitude = x * 1.0 / (radius + z) * 180.0 / math.pi * 1e7
+# Get the rotational angle.
+    ax = data.axisangle.x
+    ay = data.axisangle.y
+    az = data.axisangle.z
+    theta = math.sqrt(ax * ax + ay * ay + az * az)
+    # Get the rotational axis. If theta is close to zero, set the axis to
+    # [0, 0, 1] and theta to 0.
+    if math.fabs(theta) < 1e-5:
+      theta = 0.0
+      ax = 0.0
+      ay = 0.0
+      az = 1.0
+    else:
+      ax = ax / theta
+      ay = ay / theta
+      az = az / theta
+    # Note that (ax, ay, az) is defined in the WORLD frame, and if we rotate
+    # the WORLD frame along (ax, ay, az) by theta, we will get our BODY frame.
+    # Now here is a descrepency: we would like to switch our WORLD frame to
+    # North(x)-East(y)-Down(z) frame so that it is aligned with our BODY frame.
+    R = rotation_matrix(theta, [ax, ay, az])
+    # Now each column in R represents the corresponding axis of the BODY frame
+    # in the WORLD frame.
+    R2 = numpy.dot(numpy.array([[0.0, 1.0, 0.0, 0.0],
+                               [1.0, 0.0, 0.0, 0.0],
+                               [0.0, 0.0, -1.0, 0.0],
+                               [0.0, 0.0, 0.0, 1.0]]), R)
+    # Now R represents the transformations between the BODY frame and the faked
+    # North-East-Down frame. Specifically, R * [1 0 0 0]' returns the x axis of
+    # the BODY frame in the NED frame. Now if we solve the Euler angles from R
+    # we should be able to get the faked yaw angle.
+    roll, pitch, yaw = euler_from_matrix(R2, 'sxyz') 
+    '''
+    # For testing.
+    Rroll = rotation_matrix(roll, [1.0, 0.0, 0.0])
+    Rpitch = rotation_matrix(pitch, [0.0, 1.0, 0.0])
+    Ryaw = rotation_matrix(yaw, [0.0, 0.0, 1.0])
+    if not numpy.allclose(R2, numpy.dot(numpy.dot(Ryaw, Rpitch), Rroll)):
+      print 'panic!'
+    '''
+
+    # The radius of the earth in millimeters.
     master.mav.gps_raw_int_send(time.time() * 1000 * 1000, # Microseconds since UNIX epoch. \
                                 3, # 3D fix. \
                                 latitude, # Latitude. \
@@ -76,7 +125,6 @@ def send_vicon(data):
                                 65535, # Course over ground. \
                                 255 # Satellites visible. \
                                )
-    print latitude, longitude
 
 #service callbacks
 #def set_mode(mav_mode):
