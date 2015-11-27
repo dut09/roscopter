@@ -112,19 +112,23 @@ def send_vicon(data):
     if not numpy.allclose(R2, numpy.dot(numpy.dot(Ryaw, Rpitch), Rroll)):
       print 'panic!'
     '''
-
-    # The radius of the earth in millimeters.
-    master.mav.gps_raw_int_send(time.time() * 1000 * 1000, # Microseconds since UNIX epoch. \
-                                3, # 3D fix. \
-                                latitude, # Latitude. \
-                                longitude, # Longitude. \
-                                data.translational.z, # Meters above sea level * 1000. \
-                                1, # HDOP. Fake this so that we can arm in Loiter mode. \
-                                65535, # VDOP. \
-                                65535, # Ground speed. \
-                                65535, # Course over ground. \
-                                255 # Satellites visible. \
-                               )
+    # Send faked data.
+    master.mav.hil_state_send(time.time() * 1000 * 1000, # Microseconds since UNIX epoch.
+                              roll,
+                              pitch,
+                              yaw,
+                              0.0, # Don't use rollspeed.
+                              0.0, # Don't use pitchspeed.
+                              0.0, # Don't use yawspeed.
+                              latitude,
+                              longitude,
+                              z, # Altitude.
+                              0.0, # Don't use groundspeed.
+                              0.0,
+                              0.0,
+                              0.0, # Don't use acceleration.
+                              0.0,
+                              0.0)
 
 #service callbacks
 #def set_mode(mav_mode):
@@ -140,11 +144,11 @@ def set_disarm(req):
 
 pub_gps = rospy.Publisher('gps', NavSatFix, queue_size=50)
 #pub_imu = rospy.Publisher('imu', Imu)
-pub_rc = rospy.Publisher('rc', roscopter.msg.RC, queue_size=50)
+#pub_rc = rospy.Publisher('rc', roscopter.msg.RC, queue_size=50)
 pub_state = rospy.Publisher('state', roscopter.msg.State, queue_size=50)
-pub_vfr_hud = rospy.Publisher('vfr_hud', roscopter.msg.VFR_HUD, queue_size=50)
+#pub_vfr_hud = rospy.Publisher('vfr_hud', roscopter.msg.VFR_HUD, queue_size=50)
 pub_attitude = rospy.Publisher('attitude', roscopter.msg.Attitude, queue_size=50)
-pub_raw_imu =  rospy.Publisher('raw_imu', roscopter.msg.Mavlink_RAW_IMU, queue_size=50)
+#pub_raw_imu =  rospy.Publisher('raw_imu', roscopter.msg.Mavlink_RAW_IMU, queue_size=50)
 # Fake GPS data.
 rospy.Subscriber("TaoCopter", MocapPosition, send_vicon)
 if opts.enable_control:
@@ -175,15 +179,18 @@ def mainloop():
                 sys.stdout.flush()
         else: 
             msg_type = msg.get_type()
+            '''
             if msg_type == "RC_CHANNELS_RAW" :
                 pub_rc.publish([msg.chan1_raw, msg.chan2_raw, msg.chan3_raw, msg.chan4_raw, msg.chan5_raw, msg.chan6_raw, msg.chan7_raw, msg.chan8_raw]) 
+            '''
             if msg_type == "HEARTBEAT":
                 pub_state.publish(msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED, 
                                   msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_GUIDED_ENABLED, 
                                   mavutil.mode_string_v10(msg))
+            '''
             if msg_type == "VFR_HUD":
                 pub_vfr_hud.publish(msg.airspeed, msg.groundspeed, msg.heading, msg.throttle, msg.alt, msg.climb)
-
+            '''
             if msg_type == "GPS_RAW_INT":
                 fix = NavSatStatus.STATUS_NO_FIX
                 if msg.fix_type >=3:
@@ -200,13 +207,13 @@ def mainloop():
 
             if msg_type == "LOCAL_POSITION_NED" :
                 print "Local Pos: (%f %f %f) , (%f %f %f)" %(msg.x, msg.y, msg.z, msg.vx, msg.vy, msg.vz)
-
+            '''
             if msg_type == "RAW_IMU" :
                 pub_raw_imu.publish (Header(), msg.time_usec,
                                      msg.xacc, msg.yacc, msg.zacc,
                                      msg.xgyro, msg.ygyro, msg.zgyro,
                                      msg.xmag, msg.ymag, msg.zmag)
-
+            '''
 
 
 
