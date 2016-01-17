@@ -16,8 +16,10 @@ if __name__ == '__main__':
     pub = rospy.Publisher('TaoCopter', MocapPosition, queue_size = 50)
     rospy.init_node('fakevicon', anonymous = True)
     rate = rospy.Rate(50)
+    sample_count = 0.0
     while not rospy.is_shutdown():
-      pub.publish(MocapPosition('', 0, Vector3(4000, 2000, 1000), None))
+      pub.publish(MocapPosition('fake vicon data', sample_count, Vector3(4000, 2000, 1000), Vector3(1.0, 2.0, 4.0)))
+      sample_count = sample_count + 1.0
       rate.sleep()
   except rospy.ROSInterruptException:
     pass 
