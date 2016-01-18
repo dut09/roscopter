@@ -7,6 +7,7 @@ from std_srvs.srv import *
 from transformations import *
 from roscopter.msg import *
 from roscopter.srv import *
+from math import *
 import sys, struct, time, os, math
 from pymavlink import mavutil
 
@@ -40,7 +41,7 @@ yaw_rate_max = 30.0
 # PID parameters. Looks like a simple P controller is enough.
 xy_p = 30.0
 yaw_rate_p = 15.0
-# Destination: 0.7m above the ground.
+# Destination.
 dest_x = 0
 dest_y = 0
 
@@ -53,18 +54,6 @@ def wait_heartbeat(m):
     m.wait_heartbeat()
     print("Heartbeat from APM (system %u component %u)"
           % (m.target_system, m.target_system))
-
-def send_rc(data):
-    master.mav.rc_channels_override_send(master.target_system,
-                                         master.target_component,
-                                         data[0],
-                                         data[1],
-                                         data[2],
-                                         data[3],
-                                         data[4],
-                                         data[5],
-                                         data[6],
-                                         data[7])
 
 def remap(value, in_low, in_high, out_low, out_high):
     return (value - in_low) / (in_high - in_low) * (out_high - out_low) + out_low
@@ -135,17 +124,9 @@ def get_vicon_data(data):
     pitch_desired = clamp(xy_p * -body_x_offset, pitch_min, pitch_max)
     yaw_rate_desired = clamp(yaw_rate_p * (0 - yaw), yaw_rate_min, yaw_rate_max)
 
-    # Map angles to commands.
-    roll_command = remap(roll_desired, roll_min, roll_max, roll_radio_min,
-                         roll_radio_max)
-    pitch_command = remap(pitch_desired, pitch_min, pitch_max, pitch_radio_min,
-                          pitch_radio_max)
-    throttle_command = remap(clamp(z, z_min, z_max), z_min, z_max,
-                             throttle_radio_min, throttle_radio_max)
-    yaw_command = remap(yaw_rate_desired, yaw_rate_min, yaw_rate_max,
-                        yaw_radio_min, yaw_radio_max)
-    send_rc([roll_command, pitch_command, throttle_command, yaw_command,
-             stabilize_mode, default_ch6, default_ch7, default_ch8])
+    # Send desired angles and angle rates.
+    master.mav.attitude_send(0, roll_desired, pitch_desired, 0.0,
+                             0.0, 0.0, yaw_rate_desired)
 
 def set_arm(req):
     master.arducopter_arm()
@@ -159,6 +140,7 @@ def mainloop():
     rospy.init_node('roscopter')
     while not rospy.is_shutdown():
         rospy.sleep(0.001)
+
 ###############################################################################
 # Main script.
 ###############################################################################
