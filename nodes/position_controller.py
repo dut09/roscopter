@@ -14,6 +14,8 @@ from pymavlink import mavutil
 ###############################################################################
 # Global variables definition.
 ###############################################################################
+'''
+RC transmitter used by NRL.
 alt_holde_mode = 964
 land_mode = 1514
 stabilize_mode = 2064
@@ -29,6 +31,23 @@ throttle_radio_min = 1094
 throttle_radio_max = 1924
 yaw_radio_min = 1103
 yaw_radio_max = 1924
+'''
+# RC transmitter used by DJI.
+alt_holde_mode = 1685
+land_mode = 1297
+stabilize_mode = 1167
+default_ch6 = 1499
+default_ch7 = 1499
+default_ch8 = 1499
+# Radio min/max.
+roll_radio_min = 1040
+roll_radio_max = 1869
+pitch_radio_min = 1042
+pitch_radio_max = 1870
+throttle_radio_min = 1042
+throttle_radio_max = 1870
+yaw_radio_min = 1043
+yaw_radio_max = 1870
 # Angle min/max in degrees.
 roll_min = -30.0
 roll_max = 30.0
