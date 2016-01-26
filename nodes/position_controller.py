@@ -49,16 +49,16 @@ throttle_radio_max = 1870
 yaw_radio_min = 1043
 yaw_radio_max = 1870
 # Angle min/max in degrees.
-roll_min = -30.0
-roll_max = 30.0
-pitch_min = -30.0
-pitch_max = 30.0
+roll_min = -15.0
+roll_max = 15.0
+pitch_min = -15.0
+pitch_max = 15.0
 z_min = 0.24
 z_max = 0.74
 yaw_rate_min = -30.0
 yaw_rate_max = 30.0
 # PID parameters. Looks like a simple P controller is enough.
-xy_p = 30.0
+xy_p = 15.0
 yaw_rate_p = 15.0
 # Destination.
 dest_x = 0
