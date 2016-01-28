@@ -11,6 +11,7 @@ from roscopter.srv import *
 from math import *
 import sys, struct, time, os, math
 from pymavlink import mavutil
+from PID import *
 
 ###############################################################################
 # Global variables definition.
@@ -58,9 +59,11 @@ z_min = 0.24
 z_max = 0.74
 yaw_min = -15.0
 yaw_max = 15.0
-# PID parameters. Looks like a simple P controller is enough.
+# PID parameters.
 xy_p = 15.0
-yaw_p = 15.0
+xy_i = 0.0
+roll_pid = PID(xy_p, xy_i, 0.0)
+pitch_pid = PID(xy_p, xy_i, 0.0)
 # Destination.
 dest_x = 0
 dest_y = 0
@@ -76,7 +79,8 @@ def wait_heartbeat(m):
           % (m.target_system, m.target_system))
 
 def remap(value, in_low, in_high, out_low, out_high):
-    return (value - in_low) / (in_high - in_low) * (out_high - out_low) + out_low
+    return (value - in_low) / (in_high - in_low) * (out_high - out_low) \
+           + out_low
 
 def clamp(value, low, high):
     return max(low, min(value, high))
@@ -140,8 +144,16 @@ def get_vicon_data(data):
     body_y_offset= world_x_offset * cos(yaw) + world_y_offset * -sin(yaw)
 
     # Convert x and y offsets into desired roll and pitch angles.
-    desired_roll = clamp(xy_p * body_y_offset, roll_min, roll_max)
-    desired_pitch = clamp(xy_p * -body_x_offset, pitch_min, pitch_max)
+    global roll_pid
+    global pitch_pid
+    roll_pid.SetPoint = body_y_offset
+    pitch_pid.SetPoint = -body_x_offset
+    roll_pid.setWindup(5.0)
+    pitch_pid.setWindup(5.0)
+    roll_pid.update(0.0)
+    pitch_pid.update(0.0)
+    desired_roll = clamp(roll_pid.output, roll_min, roll_max)
+    desired_pitch = clamp(pitch_pid.output, pitch_min, pitch_max)
     desired_yaw = 0.0
     actual_roll = rad_to_deg(roll)
     actual_pitch = rad_to_deg(pitch)
@@ -158,9 +170,12 @@ def get_vicon_data(data):
     actual_roll = A * sin(w * t + pi)
     actual_pitch = A * sin(w * t + pi / 3 * 4)
     actual_yaw = A * sin(w * t + pi / 3 * 5)
-    print t, desired_roll, desired_pitch, desired_yaw, actual_roll, actual_pitch, actual_yaw
+    print t, desired_roll, desired_pitch, desired_yaw, \
+          actual_roll, actual_pitch, actual_yaw
     '''
     # Send desired angles and angle rates.
+    print desired_roll, desired_pitch, desired_yaw, \
+          actual_roll, actual_pitch, actual_yaw
     master.mav.attitude_send(0, desired_roll, desired_pitch, desired_yaw,
                              actual_roll, actual_pitch, actual_yaw)
 
