@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import roslib; roslib.load_manifest('roscopter')
 import rospy
+import time
 from std_msgs.msg import String, Header
 from mit_msgs.msg import MocapPosition
 from std_srvs.srv import *
@@ -55,11 +56,11 @@ pitch_min = -15.0
 pitch_max = 15.0
 z_min = 0.24
 z_max = 0.74
-yaw_rate_min = -30.0
-yaw_rate_max = 30.0
+yaw_min = -15.0
+yaw_max = 15.0
 # PID parameters. Looks like a simple P controller is enough.
 xy_p = 15.0
-yaw_rate_p = 15.0
+yaw_p = 15.0
 # Destination.
 dest_x = 0
 dest_y = 0
@@ -81,10 +82,10 @@ def clamp(value, low, high):
     return max(low, min(value, high))
 
 def rad_to_deg(value):
-    return value / 3.1415926 * 180.0
+    return value / pi * 180.0
 
 def deg_to_rad(value):
-    return value / 180.0 * 3.1415926
+    return value / 180.0 * pi
 
 def get_vicon_data(data):
     # Get the position info, in meters.
@@ -139,13 +140,29 @@ def get_vicon_data(data):
     body_y_offset= world_x_offset * cos(yaw) + world_y_offset * -sin(yaw)
 
     # Convert x and y offsets into desired roll and pitch angles.
-    roll_desired = clamp(xy_p * body_y_offset, roll_min, roll_max)
-    pitch_desired = clamp(xy_p * -body_x_offset, pitch_min, pitch_max)
-    yaw_rate_desired = clamp(yaw_rate_p * (0 - yaw), yaw_rate_min, yaw_rate_max)
+    desired_roll = clamp(xy_p * body_y_offset, roll_min, roll_max)
+    desired_pitch = clamp(xy_p * -body_x_offset, pitch_min, pitch_max)
+    desired_yaw = clamp(yaw_p * (0 - yaw), yaw_min, yaw_max)
+    actual_roll = rad_to_deg(roll)
+    actual_pitch = rad_to_deg(pitch)
+    actual_yaw = rad_to_deg(yaw)
 
+    '''
+    # For testing.
+    A = 15.0
+    w = 2 * pi / 6
+    t = time.time()
+    desired_roll = A * sin(w * t)
+    desired_pitch = A * sin(w * t + pi / 3)
+    desired_yaw = A * sin(w * t + pi / 3 * 2)
+    actual_roll = A * sin(w * t + pi)
+    actual_pitch = A * sin(w * t + pi / 3 * 4)
+    actual_yaw = A * sin(w * t + pi / 3 * 5)
+    print t, desired_roll, desired_pitch, desired_yaw, actual_roll, actual_pitch, actual_yaw
+    '''
     # Send desired angles and angle rates.
-    master.mav.attitude_send(0, roll_desired, pitch_desired, 0.0,
-                             0.0, 0.0, yaw_rate_desired)
+    master.mav.attitude_send(0, desired_roll, desired_pitch, desired_yaw,
+                             actual_roll, actual_pitch, actual_yaw)
 
 def set_arm(req):
     master.arducopter_arm()
