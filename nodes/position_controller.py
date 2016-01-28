@@ -142,7 +142,7 @@ def get_vicon_data(data):
     # Convert x and y offsets into desired roll and pitch angles.
     desired_roll = clamp(xy_p * body_y_offset, roll_min, roll_max)
     desired_pitch = clamp(xy_p * -body_x_offset, pitch_min, pitch_max)
-    desired_yaw = clamp(yaw_p * (0 - yaw), yaw_min, yaw_max)
+    desired_yaw = 0.0
     actual_roll = rad_to_deg(roll)
     actual_pitch = rad_to_deg(pitch)
     actual_yaw = rad_to_deg(yaw)
