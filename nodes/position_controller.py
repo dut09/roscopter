@@ -62,8 +62,9 @@ yaw_max = 15.0
 # PID parameters.
 xy_p = 15.0
 xy_i = 0.0
-roll_pid = PID(xy_p, xy_i, 0.0)
-pitch_pid = PID(xy_p, xy_i, 0.0)
+xy_d = 1.0
+roll_pid = PID(xy_p, xy_i, xy_d)
+pitch_pid = PID(xy_p, xy_i, xy_d)
 # Destination.
 dest_x = 0
 dest_y = 0
