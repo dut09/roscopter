@@ -29,6 +29,7 @@
 More information about PID Controller: http://en.wikipedia.org/wiki/PID_controller
 """
 import time
+from low_pass_filter import *
 
 class PID:
     """PID Controller
@@ -43,6 +44,7 @@ class PID:
         self.sample_time = 0.00
         self.current_time = time.time()
         self.last_time = self.current_time
+        self.low_pass_filter = LowPassFilter(20.0)
 
         self.clear()
 
@@ -96,7 +98,7 @@ class PID:
             self.last_time = self.current_time
             self.last_error = error
 
-            self.output = self.PTerm + (self.Ki * self.ITerm) + (self.Kd * self.DTerm)
+            self.output = self.PTerm + (self.Ki * self.ITerm) + (self.Kd * self.low_pass_filter.output(self.DTerm))
 
     def setKp(self, proportional_gain):
         """Determines how aggressively the PID reacts to the current error with setting Proportional Gain"""
