@@ -35,7 +35,7 @@ class PID:
     """PID Controller
     """
 
-    def __init__(self, P=0.2, I=0.0, D=0.0):
+    def __init__(self, P=0.2, I=0.0, D=0.0, f=20.0):
 
         self.Kp = P
         self.Ki = I
@@ -44,7 +44,7 @@ class PID:
         self.sample_time = 0.00
         self.current_time = time.time()
         self.last_time = self.current_time
-        self.low_pass_filter = LowPassFilter(20.0)
+        self.low_pass_filter = LowPassFilter(f)
 
         self.clear()
 
