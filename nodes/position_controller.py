@@ -175,9 +175,9 @@ def get_vicon_data(data):
           actual_roll, actual_pitch, actual_yaw
     '''
     # Send desired angles and angle rates.
-    print desired_roll, desired_pitch, desired_yaw, \
-          actual_roll, actual_pitch, actual_yaw
-    master.mav.attitude_send(0, desired_roll, desired_pitch, desired_yaw,
+    #print desired_roll, desired_pitch, z, \
+    #      actual_roll, actual_pitch, actual_yaw
+    master.mav.attitude_send(0, desired_roll, desired_pitch, z,
                              actual_roll, actual_pitch, actual_yaw)
 
 def set_arm(req):
