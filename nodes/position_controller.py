@@ -136,7 +136,6 @@ def get_vicon_data(data):
     Ryaw = rotation_matrix(yaw, [0.0, 0.0, 1.0])
     if not numpy.allclose(R2, numpy.dot(numpy.dot(Ryaw, Rpitch), Rroll)):
       print 'panic!'
-    '''
     # Compute the x and y offset.
     # In the body frame roll is x, pitch is y.
     world_x_offset = (dest_x - x)
@@ -156,6 +155,7 @@ def get_vicon_data(data):
     desired_roll = clamp(roll_pid.output, roll_min, roll_max)
     desired_pitch = clamp(pitch_pid.output, pitch_min, pitch_max)
     desired_yaw = 0.0
+    '''
     actual_roll = rad_to_deg(roll)
     actual_pitch = rad_to_deg(pitch)
     actual_yaw = rad_to_deg(yaw)
@@ -174,10 +174,9 @@ def get_vicon_data(data):
     print t, desired_roll, desired_pitch, desired_yaw, \
           actual_roll, actual_pitch, actual_yaw
     '''
-    # Send desired angles and angle rates.
-    #print desired_roll, desired_pitch, z, \
-    #      actual_roll, actual_pitch, actual_yaw
-    master.mav.attitude_send(0, desired_roll, desired_pitch, z,
+    print x, y, z, \
+          actual_roll, actual_pitch, actual_yaw
+    master.mav.attitude_send(0, x, y, z,
                              actual_roll, actual_pitch, actual_yaw)
 
 def set_arm(req):
