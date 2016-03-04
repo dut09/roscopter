@@ -98,8 +98,8 @@ yawspeed = 0.0
 last_time = neg_infinity
 # Log files.
 now = datetime.datetime.now()
-state_file_name = 'state_' + now.isoformat() + '.txt'
-control_output_file_name = 'control_' + now.isoformat() + '.txt'
+state_file_name = 'logs/state_' + now.isoformat() + '.txt'
+control_output_file_name = 'logs/control_' + now.isoformat() + '.txt'
 state_file = open(state_file_name, 'w')
 control_output_file = open(control_output_file_name, 'w')
 
@@ -261,8 +261,12 @@ def get_vicon_data(data):
     motor_outputs[4] = A * sin(w * t + pi / 3 * 4) + b
     motor_outputs[5] = A * sin(w * t + pi / 3 * 5) + b
     '''
-    state_file.write(str(X) + '\n')
-    control_output_file.write(str(motor_outputs) + '\n')
+    state_file.write('%f %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n' \
+            % (current_time, x, y, z, roll, pitch, yaw, \
+            vx, vy, vz, rollspeed, pitchspeed, yawspeed))
+    control_output_file.write('%f %f, %f, %f, %f, %f, %f\n' \
+            % (current_time, motor_outputs[0], motor_outputs[1], motor_outputs[2], \
+            motor_outputs[3], motor_outputs[4], motor_outputs[5]))
     master.mav.attitude_send(0,
             motor_outputs[0],
             motor_outputs[1],
