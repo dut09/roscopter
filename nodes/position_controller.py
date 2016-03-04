@@ -12,6 +12,7 @@ from math import *
 import sys, struct, time, os, math
 from pymavlink import mavutil
 from PID import *
+import datetime
 
 ###############################################################################
 # Global variables definition.
@@ -33,7 +34,6 @@ throttle_radio_min = 1094
 throttle_radio_max = 1924
 yaw_radio_min = 1103
 yaw_radio_max = 1924
-'''
 # RC transmitter used by DJI.
 alt_holde_mode = 1685
 land_mode = 1297
@@ -68,6 +68,40 @@ pitch_pid = PID(xy_p, xy_i, xy_d)
 # Destination.
 dest_x = 0
 dest_y = 0
+'''
+# LQR info: we have 12 states in total:
+# x, y, z, roll, pitch, yaw, v_x, v_y, v_z, roll_rate, pitch_rate, yaw_rate.
+X0 = numpy.array([0.0, 0.0, -0.45, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+# To be determined by the measurement.
+u0 = numpy.array([2.9240, 4.9958, 4.0495, 4.0497, 2.0716])
+# K matrix in LQR: u = -K(x - x0) + u0.
+# The dimension of K should be (# of motors) x 12.
+K = numpy.array([[  5.0344,    2.2649,   -4.0276,   13.0161,  -29.3714,    3.4243,    7.4469,    3.3415,   -4.3212,    2.4852,   -5.9357,    5.5313],
+                 [  5.0492,   -3.9413,   -5.3347,  -23.4722,  -29.0139,   -4.0808,    7.4481,   -5.8675,   -5.8159,   -4.7237,   -5.5464,   -6.6351],
+                 [ -4.9621,    2.2747,   -4.2333,   13.3097,   29.1368,   -6.1986,   -7.3489,    3.3667,   -4.6163,    2.7176,    6.0154,  -10.0942],
+                 [ -4.9535,   -3.9564,   -5.3054,  -23.8113,   28.4049,    5.5378,   -7.3047,   -5.9016,   -5.7151,   -4.9688,    5.3765,    8.9281],
+                 [  0.0244,    7.6491,   -3.0415,   44.8786,   -0.2274,    1.5910,    0.0400,   11.3402,   -3.2468,    8.9319,   -0.1090,    2.5470]])
+# Used for computing velocity.
+neg_infinity = -10000.0
+last_x = neg_infinity
+last_y = neg_infinity
+last_z = neg_infinity
+vx = 0.0
+vy = 0.0
+vz = 0.0
+last_roll = neg_infinity
+last_pitch = neg_infinity
+last_yaw = neg_infinity
+rollspeed = 0.0
+pitchspeed = 0.0
+yawspeed = 0.0
+last_time = neg_infinity
+# Log files.
+now = datetime.datetime.now()
+state_file_name = 'state_' + now.isoformat() + '.txt'
+control_output_file_name = 'control_' + now.isoformat() + '.txt'
+state_file = open(state_file_name, 'w')
+control_output_file = open(control_output_file_name, 'w')
 
 ###############################################################################
 # Function definition.
@@ -92,11 +126,31 @@ def rad_to_deg(value):
 def deg_to_rad(value):
     return value / 180.0 * pi
 
+def thrust_to_pwm(value):
+    # pwm ranges from 1000 to 2000.
+    # define pwm2 = pwm / 1000.
+    # thrust = 15.15 * pwm2 ^ 2 - 28.6 * pwm + 13.14
+    a = 15.15
+    b = -28.6
+    c = 13.14 - value
+    delta = b * b - 4 * a * c
+    if delta < 0.0:
+        return 1000.0
+    pwm2 = (-b + sqrt(delta)) / 2.0 / a
+    # Clamp our pwm value so that it is between 1000.0 and 1700.0.
+    return clamp(pwm2 * 1000.0, 1000.0, 1700.0)
+
 def get_vicon_data(data):
     # Get the position info, in meters.
     x = data.translational.x / 1000.0 # Faked East direction.
     y = data.translational.y / 1000.0 # Faked North direction.
     z = data.translational.z / 1000.0 # Faked "meters above sea level."
+    x, y, z = y, x, -z
+    # Unfortunately the inertia frame in the simulator is not the same as in
+    # VICON, so we have to convert x, y, z manually. Specifically, in VICON
+    # we set x to right, y to front, and z to up. In our simulator, however,
+    # x is front, y is right, and z is down.
+
     # Get the rotational angle.
     ax = data.axisangle.x
     ay = data.axisangle.y
@@ -127,8 +181,46 @@ def get_vicon_data(data):
     # Now R represents the transformations between the BODY frame and the faked
     # North-East-Down frame. Specifically, R * [1 0 0 0]' returns the x axis of
     # the BODY frame in the NED frame. Now if we solve the Euler angles from R
-    # we should be able to get the faked yaw angle.
+    # we should be able to get the faked yaw angle. All angles are in radians.
     roll, pitch, yaw = euler_from_matrix(R2, 'sxyz') 
+
+    # Calculate linear and angular velocity.
+    global last_x, last_y, last_z, last_roll, last_pitch, last_yaw, last_time
+    global vx, vy, vz, rollspeed, pitchspeed, yawspeed
+    # Get current time.
+    current_time = time.time()
+    if last_time == neg_infinity:
+        last_x = x
+        last_y = y
+        last_z = z
+        last_roll = roll
+        last_pitch = pitch
+        last_yaw = yaw
+        last_time = current_time
+    elif current_time - last_time > 0.04:
+        # Don't update until 0.1s has passed.
+        dt = current_time - last_time
+        vx = (x - last_x) / dt
+        vy = (y - last_y) / dt
+        vz = (z - last_z) / dt
+        rollspeed = (roll - last_roll) / dt
+        pitchspeed = (pitch - last_pitch) / dt
+        yawspeed = (yaw - last_yaw) / dt
+        last_x = x
+        last_y = y
+        last_z = z
+        last_roll = roll
+        last_pitch = pitch
+        last_yaw = yaw
+        last_time = current_time
+
+    X = numpy.array([x, y, z, roll, pitch, yaw,
+        vx, vy, vz, rollspeed, pitchspeed, yawspeed])
+    u = -K.dot(X - X0) + u0
+    motor_outputs = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    for i in range(u.size):
+        motor_outputs[i] = thrust_to_pwm(u[i])
+
     '''
     # For testing.
     Rroll = rotation_matrix(roll, [1.0, 0.0, 0.0])
@@ -156,28 +248,28 @@ def get_vicon_data(data):
     desired_pitch = clamp(pitch_pid.output, pitch_min, pitch_max)
     desired_yaw = 0.0
     '''
-    actual_roll = rad_to_deg(roll)
-    actual_pitch = rad_to_deg(pitch)
-    actual_yaw = rad_to_deg(yaw)
-
     '''
     # For testing.
-    A = 15.0
+    A = 300.0
+    b = 1500.0
     w = 2 * pi / 6
     t = time.time()
-    desired_roll = A * sin(w * t)
-    desired_pitch = A * sin(w * t + pi / 3)
-    desired_yaw = A * sin(w * t + pi / 3 * 2)
-    actual_roll = A * sin(w * t + pi)
-    actual_pitch = A * sin(w * t + pi / 3 * 4)
-    actual_yaw = A * sin(w * t + pi / 3 * 5)
-    print t, desired_roll, desired_pitch, desired_yaw, \
-          actual_roll, actual_pitch, actual_yaw
+    motor_outputs[0] = A * sin(w * t) + b
+    motor_outputs[1] = A * sin(w * t + pi / 3) + b
+    motor_outputs[2] = A * sin(w * t + pi / 3 * 2) + b
+    motor_outputs[3] = A * sin(w * t + pi) + b
+    motor_outputs[4] = A * sin(w * t + pi / 3 * 4) + b
+    motor_outputs[5] = A * sin(w * t + pi / 3 * 5) + b
     '''
-    print x, y, z, \
-          actual_roll, actual_pitch, actual_yaw
-    master.mav.attitude_send(0, x, y, z,
-                             actual_roll, actual_pitch, actual_yaw)
+    state_file.write(str(X) + '\n')
+    control_output_file.write(str(motor_outputs) + '\n')
+    master.mav.attitude_send(0,
+            motor_outputs[0],
+            motor_outputs[1],
+            motor_outputs[2],
+            motor_outputs[3],
+            motor_outputs[4],
+            motor_outputs[5])
 
 def set_arm(req):
     master.arducopter_arm()
@@ -218,7 +310,7 @@ if opts.device is None:
     sys.exit(1)
 
 # Set up publishers and subscribers.
-rospy.Subscriber("TaoCopter", MocapPosition, get_vicon_data)
+rospy.Subscriber("TaoFiveCopter", MocapPosition, get_vicon_data)
 
 # Define service callbacks.
 arm_service = rospy.Service('arm', Empty, set_arm)
