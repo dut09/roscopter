@@ -287,6 +287,19 @@ def mainloop():
     rospy.init_node('roscopter')
     while not rospy.is_shutdown():
         rospy.sleep(0.001)
+        msg = master.recv_match(blocking=False)
+        if not msg:
+            continue
+        if msg.get_type() == "BAD_DATA":
+            if mavutil.all_printable(msg.data):
+                sys.stdout.write(msg.data)
+                sys.stdout.flush()
+        else:
+            msg_type = msg.get_type()
+            if msg_type == "RC_CHANNELS_RAW" :
+                pub_rc.publish([msg.chan1_raw, msg.chan2_raw, msg.chan3_raw,
+                                msg.chan4_raw, msg.chan5_raw, msg.chan6_raw,
+                                msg.chan7_raw, msg.chan8_raw])
 
 ###############################################################################
 # Main script.
@@ -295,7 +308,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)),
                 '../mavlink/pymavlink'))
 # Parse input commands.
 from optparse import OptionParser
-parser = OptionParser("roscopter.py [options]")
+parser = OptionParser("position_controller.py [options]")
 parser.add_option("--baudrate", dest = "baudrate", type = 'int',
                   help = "master port baud rate", default = 57600)
 parser.add_option("--device", dest = "device", default = "/dev/ttyUSB0",
@@ -304,6 +317,8 @@ parser.add_option("--rate", dest = "rate", default = 50, type = 'int',
                   help = "requested stream rate")
 parser.add_option("--source-system", dest = 'SOURCE_SYSTEM', type = 'int',
                   default = 255, help = 'MAVLink source system for this GCS')
+parser.add_option("--name", dest = "name", default = "TaoCopter",
+                  type = 'string', help = "copter models.")
 (opts, args) = parser.parse_args()
 
 # Create a mavlink serial instance.
@@ -313,8 +328,11 @@ if opts.device is None:
     print("You must specify a serial device")
     sys.exit(1)
 
+# Set up RC listener.
+pub_rc = rospy.Publisher('rc', roscopter.msg.RC, queue_size = 50)
+
 # Set up publishers and subscribers.
-rospy.Subscriber("TaoFiveCopter", MocapPosition, get_vicon_data)
+rospy.Subscriber(opts.name, MocapPosition, get_vicon_data)
 
 # Define service callbacks.
 arm_service = rospy.Service('arm', Empty, set_arm)
