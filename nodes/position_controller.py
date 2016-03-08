@@ -12,13 +12,13 @@ from math import *
 import sys, struct, time, os, math
 from pymavlink import mavutil
 from PID import *
+from low_pass_filter import *
 import datetime
 
 ###############################################################################
 # Global variables definition.
 ###############################################################################
-'''
-RC transmitter used by NRL.
+# RC transmitter used by NRL.
 alt_holde_mode = 964
 land_mode = 1514
 stabilize_mode = 2064
@@ -26,61 +26,37 @@ default_ch6 = 964
 default_ch7 = 1189
 default_ch8 = 964
 # Radio min/max.
-roll_radio_min = 1103
-roll_radio_max = 1924
-pitch_radio_min = 1103
-pitch_radio_max = 1924
-throttle_radio_min = 1094
-throttle_radio_max = 1924
-yaw_radio_min = 1103
-yaw_radio_max = 1924
-# RC transmitter used by DJI.
-alt_holde_mode = 1685
-land_mode = 1297
-stabilize_mode = 1167
-default_ch6 = 1499
-default_ch7 = 1499
-default_ch8 = 1499
-# Radio min/max.
-roll_radio_min = 1040
-roll_radio_max = 1869
-pitch_radio_min = 1042
-pitch_radio_max = 1870
-throttle_radio_min = 1042
-throttle_radio_max = 1870
-yaw_radio_min = 1043
-yaw_radio_max = 1870
-# Angle min/max in degrees.
-roll_min = -15.0
-roll_max = 15.0
-pitch_min = -15.0
-pitch_max = 15.0
-z_min = 0.24
-z_max = 0.74
-yaw_min = -15.0
-yaw_max = 15.0
-# PID parameters.
-xy_p = 15.0
-xy_i = 0.0
-xy_d = 1.0
-roll_pid = PID(xy_p, xy_i, xy_d)
-pitch_pid = PID(xy_p, xy_i, xy_d)
-# Destination.
-dest_x = 0
-dest_y = 0
-'''
+roll_radio_min = 1103.0
+roll_radio_max = 1924.0
+pitch_radio_min = 1103.0
+pitch_radio_max = 1924.0
+throttle_radio_min = 1104.0
+throttle_radio_max = 1924.0
+yaw_radio_min = 1103.0
+yaw_radio_max = 1924.0
+# Position bound.
+x_min = -1.0
+x_max = 1.0
+y_min = -1.0
+y_max = 1.0
+z_min = 0.5
+z_max = -1.0
+# Low pass filters.
+linear_rate_lpf = LowPassFilter(3, 10)
+angular_rate_lpf = LowPassFilter(3, 10)
+motor_output_lpf = LowPassFilter(6, 20)
 # LQR info: we have 12 states in total:
 # x, y, z, roll, pitch, yaw, v_x, v_y, v_z, roll_rate, pitch_rate, yaw_rate.
-X0 = numpy.array([0.0, 0.0, -0.45, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+X0 = numpy.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 # To be determined by the measurement.
 u0 = numpy.array([2.9240, 4.9958, 4.0495, 4.0497, 2.0716])
 # K matrix in LQR: u = -K(x - x0) + u0.
 # The dimension of K should be (# of motors) x 12.
-K = numpy.array([[  5.0344,    2.2649,   -4.0276,   13.0161,  -29.3714,    3.4243,    7.4469,    3.3415,   -4.3212,    2.4852,   -5.9357,    5.5313],
-                 [  5.0492,   -3.9413,   -5.3347,  -23.4722,  -29.0139,   -4.0808,    7.4481,   -5.8675,   -5.8159,   -4.7237,   -5.5464,   -6.6351],
-                 [ -4.9621,    2.2747,   -4.2333,   13.3097,   29.1368,   -6.1986,   -7.3489,    3.3667,   -4.6163,    2.7176,    6.0154,  -10.0942],
-                 [ -4.9535,   -3.9564,   -5.3054,  -23.8113,   28.4049,    5.5378,   -7.3047,   -5.9016,   -5.7151,   -4.9688,    5.3765,    8.9281],
-                 [  0.0244,    7.6491,   -3.0415,   44.8786,   -0.2274,    1.5910,    0.0400,   11.3402,   -3.2468,    8.9319,   -0.1090,    2.5470]])
+K = numpy.array([[  0.5029,    0.2439,   -0.3922,    2.1638,   -4.2673,    0.3435,    0.8306,    0.4102,   -0.6313,    0.5757,   -1.2255,    1.4144],
+                 [  0.5069,   -0.3721,   -0.5489,   -3.4562,   -4.2667,   -0.4058,    0.8365,   -0.6322,   -0.9183,   -1.0447,   -1.1222,   -1.7047],
+                 [ -0.4937,    0.2439,   -0.4141,    2.1752,    4.2025,   -0.6218,   -0.8156,    0.4101,   -0.7006,    0.6337,    1.2488,   -2.5987],
+                 [ -0.4963,   -0.3719,   -0.5474,   -3.4776,    4.1798,    0.5530,   -0.8194,   -0.6324,   -0.8831,   -1.1093,    1.0844,    2.2792],
+                 [  0.0023,    0.7773,   -0.2716,    7.0425,   -0.0286,    0.1576,    0.0041,    1.3129,   -0.4365,    2.0304,   -0.0288,    0.6455]])
 # Used for computing velocity.
 neg_infinity = -10000.0
 last_x = neg_infinity
@@ -100,8 +76,10 @@ last_time = neg_infinity
 now = datetime.datetime.now()
 state_file_name = 'logs/state_' + now.isoformat() + '.txt'
 control_output_file_name = 'logs/control_' + now.isoformat() + '.txt'
+fix_point_file_name = 'logs/fix_point_' + now.isoformat() + '.txt'
 state_file = open(state_file_name, 'w')
 control_output_file = open(control_output_file_name, 'w')
+fix_point_file = open(fix_point_file_name, 'w')
 
 ###############################################################################
 # Function definition.
@@ -127,6 +105,8 @@ def deg_to_rad(value):
     return value / 180.0 * pi
 
 def thrust_to_pwm(value):
+    if value <= 0.0:
+        return 1000.0
     # pwm ranges from 1000 to 2000.
     # define pwm2 = pwm / 1000.
     # thrust = 15.15 * pwm2 ^ 2 - 28.6 * pwm + 13.14
@@ -187,6 +167,7 @@ def get_vicon_data(data):
     # Calculate linear and angular velocity.
     global last_x, last_y, last_z, last_roll, last_pitch, last_yaw, last_time
     global vx, vy, vz, rollspeed, pitchspeed, yawspeed
+    global linear_rate_lpf, angular_rate_lpf, motor_output_lpf
     # Get current time.
     current_time = time.time()
     if last_time == neg_infinity:
@@ -213,6 +194,9 @@ def get_vicon_data(data):
         last_pitch = pitch
         last_yaw = yaw
         last_time = current_time
+    vx, vy, vz = linear_rate_lpf.output(numpy.array([vx, vy, vz]))
+    rollspeed, pitchspeed, yawspeed = angular_rate_lpf.output( \
+            numpy.array([rollspeed, pitchspeed, yawspeed]))
 
     X = numpy.array([x, y, z, roll, pitch, yaw,
         vx, vy, vz, rollspeed, pitchspeed, yawspeed])
@@ -220,6 +204,9 @@ def get_vicon_data(data):
     motor_outputs = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     for i in range(u.size):
         motor_outputs[i] = thrust_to_pwm(u[i])
+    filtered_pwm = motor_output_lpf.output(numpy.array(motor_outputs))
+    for i in range(u.size):
+        motor_outputs[i] = filtered_pwm[i]
 
     '''
     # For testing.
@@ -261,12 +248,14 @@ def get_vicon_data(data):
     motor_outputs[4] = A * sin(w * t + pi / 3 * 4) + b
     motor_outputs[5] = A * sin(w * t + pi / 3 * 5) + b
     '''
-    state_file.write('%f %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n' \
+    state_file.write('%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n' \
             % (current_time, x, y, z, roll, pitch, yaw, \
             vx, vy, vz, rollspeed, pitchspeed, yawspeed))
-    control_output_file.write('%f %f, %f, %f, %f, %f, %f\n' \
+    control_output_file.write('%f, %f, %f, %f, %f, %f, %f\n' \
             % (current_time, motor_outputs[0], motor_outputs[1], motor_outputs[2], \
             motor_outputs[3], motor_outputs[4], motor_outputs[5]))
+    fix_point_file.write('%f, %f, %f, %f\n' \
+            % (current_time, X0[0], X0[1], X0[2]))
     master.mav.attitude_send(0,
             motor_outputs[0],
             motor_outputs[1],
@@ -297,9 +286,16 @@ def mainloop():
         else:
             msg_type = msg.get_type()
             if msg_type == "RC_CHANNELS_RAW" :
-                pub_rc.publish([msg.chan1_raw, msg.chan2_raw, msg.chan3_raw,
-                                msg.chan4_raw, msg.chan5_raw, msg.chan6_raw,
-                                msg.chan7_raw, msg.chan8_raw])
+                global X0
+                # x->roll, y->pitch, z->throttle
+                x_desired = remap(msg.chan1_raw, roll_radio_min, roll_radio_max,\
+                                  x_min, x_max)
+                y_desired = remap(msg.chan2_raw, pitch_radio_min, pitch_radio_max,\
+                                  y_min, y_max)
+                z_desired = remap(msg.chan3_raw, throttle_radio_min, throttle_radio_max,\
+                                  z_min, z_max)
+                X0[0], X0[1], X0[2] = x_desired, y_desired, z_desired
+
 
 ###############################################################################
 # Main script.
@@ -327,9 +323,6 @@ master = mavutil.mavlink_connection(opts.device, baud = opts.baudrate)
 if opts.device is None:
     print("You must specify a serial device")
     sys.exit(1)
-
-# Set up RC listener.
-pub_rc = rospy.Publisher('rc', roscopter.msg.RC, queue_size = 50)
 
 # Set up publishers and subscribers.
 rospy.Subscriber(opts.name, MocapPosition, get_vicon_data)

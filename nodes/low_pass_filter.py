@@ -2,13 +2,15 @@
 
 import time
 import math
+import numpy
 
 class LowPassFilter:
-    def __init__(self, frequency = 20):
+    def __init__(self, dim = 1, frequency = 20):
         self.frequency = frequency
+        self.dim = dim
         self.tau = 1.0 / (2.0 * math.pi * frequency)
         self.last_time = time.time()
-        self.last_value = 0.0
+        self.last_value = numpy.zeros(dim)
 
     def output(self, value):
         delta_time = time.time() - self.last_time
@@ -20,9 +22,10 @@ class LowPassFilter:
 
     def reset(self):
         self.frequency = 0.0
+        self.dim = 1
         self.tau = 0.0
         self.last_time = time.time()
-        self.last_value = 0.0
+        self.last_value = numpy.zeros(dim)
         
     def set_frequency(frequency):
         self.frequency = frequency
