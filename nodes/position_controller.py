@@ -19,71 +19,9 @@ import datetime
 # Global variables definition.
 ###############################################################################
 # RC transmitter used by NRL.
-alt_holde_mode = 964
-land_mode = 1514
-stabilize_mode = 2064
-default_ch6 = 964
-default_ch7 = 1189
-default_ch8 = 964
-# Radio min/max.
-roll_radio_min = 1103.0
-roll_radio_max = 1924.0
-pitch_radio_min = 1103.0
-pitch_radio_max = 1924.0
-throttle_radio_min = 1104.0
-throttle_radio_mid = 1500.0
-throttle_radio_max = 1924.0
-yaw_radio_min = 1103.0
-yaw_radio_max = 1924.0
-# Position bound.
-x_min = -1.0
-x_max = 1.0
-y_min = -1.0
-y_max = 1.0
-# Hacking the z values so that the motors won't receive large signals at the
-# beginning.
-z_min = 10.0
-z_mid = 0.0
-z_max = -1.0
-# Low pass filters.
-linear_rate_lpf = LowPassFilter(3, 10)
-angular_rate_lpf = LowPassFilter(3, 10)
-motor_output_lpf = LowPassFilter(6, 20)
-# LQR info: we have 12 states in total:
-# x, y, z, roll, pitch, yaw, v_x, v_y, v_z, roll_rate, pitch_rate, yaw_rate.
-X0 = numpy.array([0.0, 0.0, z_min, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-# To be determined by the measurement.
-u0 = numpy.array([2.9240, 4.9958, 4.0495, 4.0497, 2.0716])
-# K matrix in LQR: u = -K(x - x0) + u0.
-# The dimension of K should be (# of motors) x 12.
-K = numpy.array([[ 1.5900,    0.7479,   -1.2550,    4.9273,  -10.4369,    1.0862,    2.4301,    1.1474,   -1.5327,    1.0416,   -2.3922,    2.6730],
-                 [ 1.6016,   -1.2080,   -1.7148,   -8.4019,  -10.3930,   -1.2841,    2.4443,   -1.8782,   -2.1562,   -1.9682,   -2.1990,   -3.2093],
-                 [-1.5627,    0.7479,   -1.3226,    4.9827,   10.3094,   -1.9656,   -2.3899,    1.1486,   -1.6688,    1.1527,    2.4371,   -4.8976],
-                 [-1.5700,   -1.2083,   -1.7081,   -8.4771,   10.1826,    1.7487,   -2.3964,   -1.8811,   -2.0972,   -2.0884,    2.1261,    4.3048],
-                 [ 0.0071,    2.4417,   -0.9042,   16.5224,   -0.0704,    0.4994,    0.0115,    3.7690,   -1.0965,    3.7460,   -0.0526,    1.2212]])
-# Used for computing velocity.
-neg_infinity = -10000.0
-last_x = neg_infinity
-last_y = neg_infinity
-last_z = neg_infinity
-vx = 0.0
-vy = 0.0
-vz = 0.0
-last_roll = neg_infinity
-last_pitch = neg_infinity
-last_yaw = neg_infinity
-rollspeed = 0.0
-pitchspeed = 0.0
-yawspeed = 0.0
-last_time = neg_infinity
-# Log files.
 now = datetime.datetime.now()
-state_file_name = 'logs/state_' + now.isoformat() + '.txt'
-control_output_file_name = 'logs/control_' + now.isoformat() + '.txt'
-fix_point_file_name = 'logs/fix_point_' + now.isoformat() + '.txt'
+state_file_name = 'logs-vicon/state_' + now.isoformat() + '.txt'
 state_file = open(state_file_name, 'w')
-control_output_file = open(control_output_file_name, 'w')
-fix_point_file = open(fix_point_file_name, 'w')
 
 ###############################################################################
 # Function definition.
@@ -107,22 +45,6 @@ def rad_to_deg(value):
 
 def deg_to_rad(value):
     return value / 180.0 * pi
-
-def thrust_to_pwm(value):
-    if value <= 0.0:
-        return 1000.0
-    # pwm ranges from 1000 to 2000.
-    # define pwm2 = pwm / 1000.
-    # thrust = 15.15 * pwm2 ^ 2 - 28.6 * pwm + 13.14
-    a = 15.15
-    b = -28.6
-    c = 13.14 - value
-    delta = b * b - 4 * a * c
-    if delta < 0.0:
-        return 1000.0
-    pwm2 = (-b + sqrt(delta)) / 2.0 / a
-    # Clamp our pwm value so that it is between 1000.0 and 1700.0.
-    return clamp(pwm2 * 1000.0, 1000.0, 1700.0)
 
 def get_vicon_data(data):
     # Get the position info, in meters.
@@ -168,49 +90,8 @@ def get_vicon_data(data):
     # we should be able to get the faked yaw angle. All angles are in radians.
     roll, pitch, yaw = euler_from_matrix(R2, 'sxyz') 
 
-    # Calculate linear and angular velocity.
-    global last_x, last_y, last_z, last_roll, last_pitch, last_yaw, last_time
-    global vx, vy, vz, rollspeed, pitchspeed, yawspeed
-    global linear_rate_lpf, angular_rate_lpf, motor_output_lpf
     # Get current time.
     current_time = time.time()
-    if last_time == neg_infinity:
-        last_x = x
-        last_y = y
-        last_z = z
-        last_roll = roll
-        last_pitch = pitch
-        last_yaw = yaw
-        last_time = current_time
-    elif current_time - last_time > 0.04:
-        # Don't update until 0.1s has passed.
-        dt = current_time - last_time
-        vx = (x - last_x) / dt
-        vy = (y - last_y) / dt
-        vz = (z - last_z) / dt
-        rollspeed = (roll - last_roll) / dt
-        pitchspeed = (pitch - last_pitch) / dt
-        yawspeed = (yaw - last_yaw) / dt
-        last_x = x
-        last_y = y
-        last_z = z
-        last_roll = roll
-        last_pitch = pitch
-        last_yaw = yaw
-        last_time = current_time
-    vx, vy, vz = linear_rate_lpf.output(numpy.array([vx, vy, vz]))
-    rollspeed, pitchspeed, yawspeed = angular_rate_lpf.output( \
-            numpy.array([rollspeed, pitchspeed, yawspeed]))
-
-    X = numpy.array([x, y, z, roll, pitch, yaw,
-        vx, vy, vz, rollspeed, pitchspeed, yawspeed])
-    u = -K.dot(X - X0) + u0
-    motor_outputs = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    for i in range(u.size):
-        motor_outputs[i] = thrust_to_pwm(u[i])
-    filtered_pwm = motor_output_lpf.output(numpy.array(motor_outputs))
-    for i in range(u.size):
-        motor_outputs[i] = filtered_pwm[i]
 
     '''
     # For testing.
@@ -226,47 +107,22 @@ def get_vicon_data(data):
     body_x_offset = world_x_offset * sin(yaw) + world_y_offset * cos(yaw)
     body_y_offset= world_x_offset * cos(yaw) + world_y_offset * -sin(yaw)
 
-    # Convert x and y offsets into desired roll and pitch angles.
-    global roll_pid
-    global pitch_pid
-    roll_pid.SetPoint = body_y_offset
-    pitch_pid.SetPoint = -body_x_offset
-    roll_pid.setWindup(5.0)
-    pitch_pid.setWindup(5.0)
-    roll_pid.update(0.0)
-    pitch_pid.update(0.0)
-    desired_roll = clamp(roll_pid.output, roll_min, roll_max)
-    desired_pitch = clamp(pitch_pid.output, pitch_min, pitch_max)
-    desired_yaw = 0.0
-    '''
-    '''
     # For testing.
     A = 300.0
     b = 1500.0
     w = 2 * pi / 6
     t = time.time()
-    motor_outputs[0] = A * sin(w * t) + b
-    motor_outputs[1] = A * sin(w * t + pi / 3) + b
-    motor_outputs[2] = A * sin(w * t + pi / 3 * 2) + b
-    motor_outputs[3] = A * sin(w * t + pi) + b
-    motor_outputs[4] = A * sin(w * t + pi / 3 * 4) + b
-    motor_outputs[5] = A * sin(w * t + pi / 3 * 5) + b
+    x = A * sin(w * t) + b
+    y = A * sin(w * t + pi / 3) + b
+    z = A * sin(w * t + pi / 3 * 2) + b
+    roll = A * sin(w * t + pi) + b
+    pitch = A * sin(w * t + pi / 3 * 4) + b
+    yaw = A * sin(w * t + pi / 3 * 5) + b
     '''
-    state_file.write('%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n' \
-            % (current_time, x, y, z, roll, pitch, yaw, \
-            vx, vy, vz, rollspeed, pitchspeed, yawspeed))
-    control_output_file.write('%f, %f, %f, %f, %f, %f, %f\n' \
-            % (current_time, motor_outputs[0], motor_outputs[1], motor_outputs[2], \
-            motor_outputs[3], motor_outputs[4], motor_outputs[5]))
-    fix_point_file.write('%f, %f, %f, %f\n' \
-            % (current_time, X0[0], X0[1], X0[2]))
+    state_file.write('%f, %f, %f, %f, %f, %f, %f\n' \
+            % (current_time, x, y, z, roll, pitch, yaw))
     master.mav.attitude_send(0,
-            motor_outputs[0],
-            motor_outputs[1],
-            motor_outputs[2],
-            motor_outputs[3],
-            motor_outputs[4],
-            motor_outputs[5])
+            x, y, z, roll, pitch, yaw)
 
 def set_arm(req):
     master.arducopter_arm()
@@ -280,30 +136,6 @@ def mainloop():
     rospy.init_node('roscopter')
     while not rospy.is_shutdown():
         rospy.sleep(0.001)
-        msg = master.recv_match(blocking=False)
-        if not msg:
-            continue
-        if msg.get_type() == "BAD_DATA":
-            if mavutil.all_printable(msg.data):
-                sys.stdout.write(msg.data)
-                sys.stdout.flush()
-        else:
-            msg_type = msg.get_type()
-            if msg_type == "RC_CHANNELS_RAW" :
-                global X0
-                # x->roll, y->pitch, z->throttle
-                x_desired = remap(msg.chan1_raw, roll_radio_min, roll_radio_max,\
-                                  x_min, x_max)
-                y_desired = remap(msg.chan2_raw, pitch_radio_min, pitch_radio_max,\
-                                  y_min, y_max)
-                if msg.chan3_raw < throttle_radio_mid:
-                    z_desired = remap(msg.chan3_raw, throttle_radio_min,\
-                                    throttle_radio_mid, z_min, z_mid)
-                else:
-                    z_desired = remap(msg.chan3_raw, throttle_radio_mid,\
-                                    throttle_radio_max, z_mid, z_max)
-                X0[0], X0[1], X0[2] = x_desired, y_desired, z_desired
-
 
 ###############################################################################
 # Main script.
