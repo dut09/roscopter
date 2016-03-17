@@ -31,6 +31,7 @@ roll_radio_max = 1924.0
 pitch_radio_min = 1103.0
 pitch_radio_max = 1924.0
 throttle_radio_min = 1104.0
+throttle_radio_mid = 1500.0
 throttle_radio_max = 1924.0
 yaw_radio_min = 1103.0
 yaw_radio_max = 1924.0
@@ -39,7 +40,10 @@ x_min = -1.0
 x_max = 1.0
 y_min = -1.0
 y_max = 1.0
-z_min = 0.5
+# Hacking the z values so that the motors won't receive large signals at the
+# beginning.
+z_min = 10.0
+z_mid = 0.0
 z_max = -1.0
 # Low pass filters.
 linear_rate_lpf = LowPassFilter(3, 10)
@@ -47,16 +51,16 @@ angular_rate_lpf = LowPassFilter(3, 10)
 motor_output_lpf = LowPassFilter(6, 20)
 # LQR info: we have 12 states in total:
 # x, y, z, roll, pitch, yaw, v_x, v_y, v_z, roll_rate, pitch_rate, yaw_rate.
-X0 = numpy.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+X0 = numpy.array([0.0, 0.0, z_min, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 # To be determined by the measurement.
 u0 = numpy.array([2.9240, 4.9958, 4.0495, 4.0497, 2.0716])
 # K matrix in LQR: u = -K(x - x0) + u0.
 # The dimension of K should be (# of motors) x 12.
-K = numpy.array([[  0.5029,    0.2439,   -0.3922,    2.1638,   -4.2673,    0.3435,    0.8306,    0.4102,   -0.6313,    0.5757,   -1.2255,    1.4144],
-                 [  0.5069,   -0.3721,   -0.5489,   -3.4562,   -4.2667,   -0.4058,    0.8365,   -0.6322,   -0.9183,   -1.0447,   -1.1222,   -1.7047],
-                 [ -0.4937,    0.2439,   -0.4141,    2.1752,    4.2025,   -0.6218,   -0.8156,    0.4101,   -0.7006,    0.6337,    1.2488,   -2.5987],
-                 [ -0.4963,   -0.3719,   -0.5474,   -3.4776,    4.1798,    0.5530,   -0.8194,   -0.6324,   -0.8831,   -1.1093,    1.0844,    2.2792],
-                 [  0.0023,    0.7773,   -0.2716,    7.0425,   -0.0286,    0.1576,    0.0041,    1.3129,   -0.4365,    2.0304,   -0.0288,    0.6455]])
+K = numpy.array([[ 1.5900,    0.7479,   -1.2550,    4.9273,  -10.4369,    1.0862,    2.4301,    1.1474,   -1.5327,    1.0416,   -2.3922,    2.6730],
+                 [ 1.6016,   -1.2080,   -1.7148,   -8.4019,  -10.3930,   -1.2841,    2.4443,   -1.8782,   -2.1562,   -1.9682,   -2.1990,   -3.2093],
+                 [-1.5627,    0.7479,   -1.3226,    4.9827,   10.3094,   -1.9656,   -2.3899,    1.1486,   -1.6688,    1.1527,    2.4371,   -4.8976],
+                 [-1.5700,   -1.2083,   -1.7081,   -8.4771,   10.1826,    1.7487,   -2.3964,   -1.8811,   -2.0972,   -2.0884,    2.1261,    4.3048],
+                 [ 0.0071,    2.4417,   -0.9042,   16.5224,   -0.0704,    0.4994,    0.0115,    3.7690,   -1.0965,    3.7460,   -0.0526,    1.2212]])
 # Used for computing velocity.
 neg_infinity = -10000.0
 last_x = neg_infinity
@@ -292,8 +296,12 @@ def mainloop():
                                   x_min, x_max)
                 y_desired = remap(msg.chan2_raw, pitch_radio_min, pitch_radio_max,\
                                   y_min, y_max)
-                z_desired = remap(msg.chan3_raw, throttle_radio_min, throttle_radio_max,\
-                                  z_min, z_max)
+                if msg.chan3_raw < throttle_radio_mid:
+                    z_desired = remap(msg.chan3_raw, throttle_radio_min,\
+                                    throttle_radio_mid, z_min, z_mid)
+                else:
+                    z_desired = remap(msg.chan3_raw, throttle_radio_mid,\
+                                    throttle_radio_max, z_mid, z_max)
                 X0[0], X0[1], X0[2] = x_desired, y_desired, z_desired
 
 
