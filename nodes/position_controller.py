@@ -149,7 +149,7 @@ parser.add_option("--baudrate", dest = "baudrate", type = 'int',
                   help = "master port baud rate", default = 57600)
 parser.add_option("--device", dest = "device", default = "/dev/ttyUSB0",
                   help = "serial device")
-parser.add_option("--rate", dest = "rate", default = 50, type = 'int',
+parser.add_option("--rate", dest = "rate", default = 125, type = 'int',
                   help = "requested stream rate")
 parser.add_option("--source-system", dest = 'SOURCE_SYSTEM', type = 'int',
                   default = 255, help = 'MAVLink source system for this GCS')
@@ -174,8 +174,8 @@ disarm_service = rospy.Service('disarm', Empty, set_disarm)
 wait_heartbeat(master)
 
 # Waiting for 10 seconds for the system to be ready.
-print("Sleeping for 10 seconds to allow system, to be ready")
-rospy.sleep(10)
+print("Sleeping for 5 seconds to allow system, to be ready")
+rospy.sleep(5)
 print("Sending all stream request for rate %u" % opts.rate)
 
 master.mav.request_data_stream_send(master.target_system,
