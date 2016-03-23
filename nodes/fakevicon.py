@@ -13,6 +13,7 @@ import sys, struct, time, os
 from optparse import OptionParser
 import time
 import math
+from transformations import *
 
 parser = OptionParser("fakevicon.py [options]")
 parser.add_option("--name", dest = "name", default = "TaoCopter",
@@ -27,15 +28,27 @@ if __name__ == '__main__':
     rospy.init_node('fakevicon', anonymous = True)
     rate = rospy.Rate(opts.rate)
     sample_count = 0.0
-    A = 300.0
-    b = 1500.0
-    w = 2 * math.pi / 6
+    A_xyz = 300.0
+    b_xyz = 1500.0
+    w_xyz = 2 * math.pi / 6
+    A_rpy = 0.5
+    w_rpy = math.pi / 4
     while not rospy.is_shutdown():
       t = time.time()
-      x = A * math.sin(w * t) + b
-      y = A * math.sin(w * t + math.pi / 3) + b
-      z = A * math.sin(w * t + math.pi / 3 * 2) + b
-      pub.publish(MocapPosition('fake vicon data', sample_count, Vector3(x, y, z), Vector3(1.0, 2.0, 4.0)))
+      x = A_xyz * math.sin(w_xyz * t) + b_xyz
+      y = A_xyz * math.sin(w_xyz * t + math.pi / 3) + b_xyz
+      z = A_xyz * math.sin(w_xyz * t + math.pi / 3 * 2) + b_xyz
+      roll = A_rpy * math.sin(w_rpy * t)
+      pitch = A_rpy * math.sin(w_rpy * t + math.pi / 3)
+      yaw = A_rpy * math.sin(w_rpy * t + math.pi / 3 * 2)
+      R2 = euler_matrix(roll, pitch, yaw, 'sxyz')
+      R = numpy.dot(numpy.array([[0.0, 1.0, 0.0, 0.0],
+                                 [1.0, 0.0, 0.0, 0.0],
+                                 [0.0, 0.0, -1.0, 0.0],
+                                 [0.0, 0.0, 0.0, 1.0]]), R2)
+      angle, direc, _ = rotation_from_matrix(R)
+      pub.publish(MocapPosition('fake vicon data', sample_count, Vector3(x, y, z), \
+                                Vector3(direc[0] * angle, direc[1] * angle, direc[2] * angle)))
       sample_count = sample_count + 1.0
       rate.sleep()
   except rospy.ROSInterruptException:
