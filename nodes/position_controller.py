@@ -121,7 +121,7 @@ def get_vicon_data(data):
     '''
     state_file.write('%f, %f, %f, %f, %f, %f, %f\n' \
             % (current_time, x, y, z, roll, pitch, yaw))
-    master.mav.vision_position_estimate_send(0,
+    master.mav.attitude_send(0,
             x, y, z, roll, pitch, yaw)
 
 def set_arm(req):
