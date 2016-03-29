@@ -136,6 +136,18 @@ def mainloop():
     rospy.init_node('roscopter')
     while not rospy.is_shutdown():
         rospy.sleep(0.001)
+        msg = master.recv_match(blocking=False)
+        if not msg:
+            continue
+        #print msg.get_type()
+        if msg.get_type() == "BAD_DATA":
+            if mavutil.all_printable(msg.data):
+                sys.stdout.write(msg.data)
+                sys.stdout.flush()
+        else:
+            msg_type = msg.get_type()
+            if msg_type == "ATTITUDE" :
+                pub_attitude.publish(msg.roll, msg.pitch, msg.yaw, msg.rollspeed, msg.pitchspeed, msg.yawspeed)
 
 ###############################################################################
 # Main script.
@@ -163,6 +175,8 @@ master = mavutil.mavlink_connection(opts.device, baud = opts.baudrate)
 if opts.device is None:
     print("You must specify a serial device")
     sys.exit(1)
+
+pub_attitude = rospy.Publisher('attitude', Attitude, queue_size=50)
 
 # Set up publishers and subscribers.
 rospy.Subscriber(opts.name, MocapPosition, get_vicon_data)
