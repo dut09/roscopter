@@ -4,10 +4,8 @@ import rospy
 import time
 from std_msgs.msg import String, Header
 from mit_msgs.msg import MocapPosition
-from std_srvs.srv import *
 from transformations import *
 from roscopter.msg import *
-from roscopter.srv import *
 from math import *
 import sys, struct, time, os, math
 from pymavlink import mavutil
@@ -208,6 +206,8 @@ parser.add_option("--rate", dest = "rate", default = 50, type = 'int',
                   help = "requested stream rate")
 parser.add_option("--source-system", dest = 'SOURCE_SYSTEM', type = 'int',
                   default = 255, help = 'MAVLink source system for this GCS')
+parser.add_option("--name", dest = "name", type = 'str',
+                  help = "Name of your vicon model", default = 'empty')
 (opts, args) = parser.parse_args()
 
 # Create a mavlink serial instance.
@@ -218,11 +218,8 @@ if opts.device is None:
     sys.exit(1)
 
 # Set up publishers and subscribers.
-rospy.Subscriber("TaoCopter", MocapPosition, get_vicon_data)
+rospy.Subscriber(opts.name, MocapPosition, get_vicon_data)
 
-# Define service callbacks.
-arm_service = rospy.Service('arm', Empty, set_arm)
-disarm_service = rospy.Service('disarm', Empty, set_disarm)
 # Wait for the heartbeat msg to find the system ID.
 wait_heartbeat(master)
 

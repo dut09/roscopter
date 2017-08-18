@@ -1,5 +1,4 @@
 build/
-mavlink/
 msg_gen/
 src/
 srv/
